@@ -1,0 +1,56 @@
+version: "2"
+
+services:
+  mint:
+    restart: "no"
+    image: katzenpost-alpine_go_mod
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cashu_mint
+    ports:
+      - "3338:3338"
+    environment:
+      - MINT_LIGHTNING_BACKEND=FakeWallet
+      - MINT_LISTEN_PORT=3338
+      - MINT_LISTEN_HOST=0.0.0.0
+      - MINT_PRIVATE_KEY=TEST_PRIVATE_KEY
+    command: [ "poetry", "run", "mint" ]
+
+  client_cashu_wallet:
+    restart: "no"
+    image: katzenpost-alpine_go_mod
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: client_cashu_wallet
+    depends_on:
+      - mint
+    ports:
+      - "4448:4448"
+    environment:
+      # - HTTP_PROXY=http://127.0.0.1:8080
+      - MINT_URL=http://mint:3338
+      - API_HOST=0.0.0.0
+      - API_PORT=4448
+      - TOR=False
+    command: [ "poetry", "run", "cashu", "-d" ]
+
+  server_cashu_wallet:
+    restart: "no"
+    image: katzenpost-alpine_go_mod
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: server_cashu_wallet
+    depends_on:
+      - mint
+    ports:
+      - "4449:4449"
+    environment:
+      # - HTTP_PROXY=http://127.0.0.1:8081
+      - MINT_URL=http://mint:3338
+      - API_HOST=0.0.0.0
+      - API_PORT=4449
+      - TOR=False
+    command: [ "poetry", "run", "cashu", "-d" ]
