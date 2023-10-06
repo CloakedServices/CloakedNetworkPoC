@@ -736,6 +736,11 @@ services:
     volumes:
       - ./:%s
     command: %s/http_proxy_client%s -cfg %s/client/client.toml -ep cashu -port 8080
+    healthcheck:
+      test: ["CMD", "curl", "-x", "http://127.0.0.1:8080", "-f", "http://127.0.0.1:3338/keys"]
+      interval: 10s
+      timeout: 5s
+      retries: 100
     network_mode: host
     expose:
      - "8080/tcp"
@@ -749,6 +754,11 @@ services:
     volumes:
       - ./:%s
     command: %s/http_proxy_client%s -cfg %s/client/client.toml -ep cashu -port 8081
+    healthcheck:
+      test: ["CMD", "curl", "-x", "http://127.0.0.1:8081", "-f", "http://127.0.0.1:3338/keys"]
+      interval: 10s
+      timeout: 5s
+      retries: 100
     network_mode: host
     expose:
      - "8081/tcp"
@@ -786,8 +796,11 @@ services:
 	// add client cashu wallet
 	write(f, `
   client_cashu_wallet:
-    restart: "no"
+    restart: on-failure
     image: cashu
+    depends_on:
+      proxy_cashu_client:
+        condition: service_healthy
     network_mode: host
     expose:
      - "4448/tcp"
@@ -802,8 +815,11 @@ services:
 	// add server cashu wallet
 	write(f, `
   server_cashu_wallet:
-    restart: "no"
+    restart: on-failure
     image: cashu
+    depends_on:
+      proxy_cashu_server:
+        condition: service_healthy
     network_mode: host
     expose:
      - "4449/tcp"
