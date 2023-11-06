@@ -48,6 +48,7 @@ var (
 	socksPort        = flag.Int("socks_port", 4242, "SOCKS5 TCP listening port")
 	cashuAPI         = flag.String("cashu_api", "http://127.0.0.1:4448", "Cashu wallet API endpoint")
 	cli              = flag.Bool("cli", false, "cli mode")
+	gw               = flag.String("gw", "", "Specify gateway by name")
 
 	// socks port selector
 	portSelect    = &PortSelect{Editor: &widget.Editor{SingleLine: true, Submit: true, Filter: "0123456789"}}
@@ -565,6 +566,34 @@ func main() {
 			clicked:     make(chan struct{}, 2),
 			connect:     &widget.Clickable{},
 			connectOnce: new(sync.Once),
+		}
+
+		invoice.get()
+		_, doc, err := kclient.GetPKI(context.Background(), *clientConfigFile)
+		if err == nil && doc != nil {
+			gatewaySelect.Lock()
+			gatewaySelect.gateways = utils.FindServices("katzensocks", doc)
+			if *gw != "" {
+				// see if our specified gateway exists by name
+				found := false
+				for _, desc := range gatewaySelect.gateways {
+					if *gw == desc.Provider {
+						gatewaySelect.selected = *gw
+						found = true
+					}
+				}
+				if !found {
+					log.Fatal("Failed to find gateway ", *gw)
+				}
+			} else {
+				// choose random gateway
+				if len(gatewaySelect.gateways) > 0 {
+					m := rand.NewMath()
+					n := m.Intn(len(gatewaySelect.gateways))
+					gatewaySelect.selected = gatewaySelect.gateways[n].Provider
+				}
+			}
+			gatewaySelect.Unlock()
 		}
 
 		a.doConnectClick()
