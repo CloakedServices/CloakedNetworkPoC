@@ -119,7 +119,12 @@ func (c *ConnectSwitch) On() {
 }
 
 func (c *ConnectSwitch) Layout(gtx C) D {
-	return material.Switch(th, c.connected, "Connect").Layout(gtx)
+	return layout.UniformInset(unit.Dp(10)).Layout(gtx, func(gtx C) D {
+		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+			layout.Rigid(material.H6(th, "Enable Proxy").Layout),
+			layout.Rigid(material.Switch(th, c.connected, "Connect").Layout),
+		)
+	})
 }
 
 // Invoice is a widget to display a lightning invoice to buy nuts
