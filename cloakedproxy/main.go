@@ -72,7 +72,7 @@ var (
 		// XXX: for some reason I get no fonts when building/running in podman alpine without the next line
 		th.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Regular()))
 		th.Bg = rgb(0x55555555)
-		th.Fg = rgb(0x00FF0000)
+		th.Fg = rgb(0x00000000)
 		th.ContrastBg = rgb(0x22222222)
 		th.ContrastFg = rgb(0x77777777)
 		return th
