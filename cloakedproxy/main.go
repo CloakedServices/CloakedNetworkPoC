@@ -27,6 +27,7 @@ import (
 	"github.com/katzenpost/katzenpost/core/worker"
 	"github.com/katzenpost/katzenpost/katzensocks/cashu"
 	kclient "github.com/katzenpost/katzenpost/katzensocks/client"
+	"github.com/mdp/qrterminal/v3"
 	qrcode "github.com/skip2/go-qrcode"
 	"image"
 	"image/color"
@@ -146,6 +147,12 @@ func (i *Invoice) QR() (*qrcode.QRCode, error) {
 	i.Lock()
 	defer i.Unlock()
 	return qrcode.New(i.paymentRequest, qrcode.High)
+}
+
+func (i *Invoice) QRText() {
+	i.Lock()
+	defer i.Unlock()
+	qrterminal.Generate(i.paymentRequest, qrterminal.L, os.Stdout)
 }
 
 func (i *Invoice) layoutQr(gtx C) D {
@@ -405,7 +412,6 @@ func (a *App) run() error {
 			}
 			gatewaySelect.Unlock()
 		}
-		a.w.Invalidate()
 	}()
 
 	for {
@@ -416,6 +422,12 @@ func (a *App) run() error {
 			}
 		case <-a.HaltCh():
 			return errors.New("Halted")
+		case <-time.After(60 * time.Second):
+			if *cli {
+				invoice.get() // request new invoice
+				fmt.Printf("balance: %s", wallet.Balance())
+				invoice.QRText()
+			}
 		}
 	}
 }
@@ -569,6 +581,7 @@ func main() {
 		}
 
 		invoice.get()
+		invoice.QRText()
 		_, doc, err := kclient.GetPKI(context.Background(), *clientConfigFile)
 		if err == nil && doc != nil {
 			gatewaySelect.Lock()
