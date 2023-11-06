@@ -160,7 +160,7 @@ func (i *Invoice) layoutQr(gtx C) D {
 		gtx.Constraints = layout.Exact(gtx.Constraints.Constrain(sz))
 		qr, err := i.QR()
 		if err != nil {
-			return layout.Center.Layout(gtx, material.Caption(th, "Get Invoice").Layout)
+			return layout.Center.Layout(gtx, material.Caption(th, "Add Credit").Layout)
 		}
 		qr.BackgroundColor = th.Bg
 		qr.ForegroundColor = th.Fg
