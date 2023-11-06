@@ -221,7 +221,7 @@ func (i *Invoice) Layout(gtx C) D {
 	return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceBetween, Alignment: layout.Middle}.Layout(gtx,
 		layout.Rigid(func(gtx C) D {
 			return layout.UniformInset(unit.Dp(10)).Layout(gtx, func(gtx C) D {
-				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
 					layout.Rigid(material.H6(th, "Get Nuts: ").Layout),
 					layout.Rigid(material.Editor(th, i.amountEd, "").Layout),
 				)
@@ -260,7 +260,7 @@ func (w *Wallet) update() {
 // Layout renders the wallet balance
 func (w *Wallet) Layout(gtx C) D {
 	return layout.UniformInset(unit.Dp(10)).Layout(gtx, func(gtx C) D {
-		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
 			layout.Rigid(material.H6(th, "Balance: ").Layout),
 			layout.Rigid(material.H6(th, fmt.Sprintf("%d", w.Balance())).Layout),
 		)
@@ -275,7 +275,7 @@ type PortSelect struct {
 // Layout renders the port selector widget
 func (p *PortSelect) Layout(gtx C) D {
 	return layout.UniformInset(unit.Dp(10)).Layout(gtx, func(gtx C) D {
-		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
 			layout.Rigid(material.H6(th, "SOCKS5 Port: ").Layout),
 			layout.Rigid(material.Editor(th, p.Editor, "port").Layout),
 		)
@@ -337,7 +337,7 @@ func (g *GatewaySelect) Layout(gtx C) D {
 		return D{}
 	}
 	return layout.UniformInset(unit.Dp(10)).Layout(gtx, func(gtx C) D {
-		return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
+		return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle, Spacing: layout.SpaceEnd}.Layout(gtx,
 			layout.Rigid(material.H6(th, "Choose Gateway: ").Layout),
 			layout.Rigid(func(gtx C) D {
 				return g.gatewayList.Layout(gtx, len(g.gateways), func(gtx C, i int) layout.Dimensions {
@@ -458,15 +458,15 @@ func (c *ConnectSwitch) update(a *App) {
 func (a *App) Layout(gtx C) {
 	// display connected status
 	// display disconnect/connect button
-	layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceBetween, Alignment: layout.Start}.Layout(gtx,
+	layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceEnd, Alignment: layout.Middle}.Layout(gtx,
 		// Proxy Port Selector
 		layout.Rigid(portSelect.Layout),
 		// layout the connect/disconnect switch
 		layout.Rigid(connectSwitch.Layout),
+		// wallet balance
+		layout.Rigid(wallet.Layout),
 		// layout add credit topup invoice
 		layout.Flexed(1, invoice.Layout),
-		// wallet balance
-		layout.Flexed(1, wallet.Layout),
 		// layout the exit node selection
 		layout.Flexed(1, gatewaySelect.Layout),
 	)
@@ -571,6 +571,7 @@ func main() {
 		w := app.NewWindow(
 			app.Title("CloakedProxy"),
 			app.NavigationColor(rgb(0x0)),
+			app.Size(unit.Dp(300), unit.Dp(600)),
 			app.StatusColor(rgb(0x0)),
 		)
 		c, err := setupClient()
