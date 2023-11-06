@@ -341,22 +341,23 @@ func (g *GatewaySelect) Layout(gtx C) D {
 			layout.Rigid(material.H6(th, "Choose Gateway: ").Layout),
 			layout.Rigid(func(gtx C) D {
 				return g.gatewayList.Layout(gtx, len(g.gateways), func(gtx C, i int) layout.Dimensions {
-					// TODO: style this appropriately
-					gw := ""
-					if g.selected == g.gateways[i].Provider {
-						gw = "* " + g.gateways[i].Provider
-					} else {
-						gw = g.gateways[i].Provider
-					}
-
 					// add a click handler to gateway
-					dims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-						layout.Rigid(material.H6(th, gw).Layout),
-						// TODO: add other details such as geolocation, IP, etc
-						layout.Rigid(func(gtx C) D {
-							return layout.UniformInset(unit.Dp(10)).Layout(gtx, material.H6(th, "location: DE").Layout)
-						}),
-					)
+					nodeLayout := func(gtx C) D {
+						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+							layout.Rigid(material.H6(th, g.gateways[i].Provider).Layout),
+							layout.Rigid(material.H6(th, "location: DE").Layout),
+						)
+					}
+					var dims layout.Dimensions
+					if g.selected == g.gateways[i].Provider {
+						dims = layout.UniformInset(unit.Dp(5)).Layout(gtx, func(gtx C) D {
+							return widget.Border{Color: th.ContrastBg, Width: unit.Dp(2), CornerRadius: unit.Dp(5)}.Layout(gtx, func(gtx C) D {
+								return layout.UniformInset(unit.Dp(5)).Layout(gtx, nodeLayout)
+							})
+						})
+					} else {
+						dims = layout.UniformInset(unit.Dp(10)).Layout(gtx, nodeLayout)
+					}
 
 					a := clip.Rect(image.Rectangle{Max: dims.Size})
 					t := a.Push(gtx.Ops)
