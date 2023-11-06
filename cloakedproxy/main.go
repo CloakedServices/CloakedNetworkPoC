@@ -352,6 +352,10 @@ func (g *GatewaySelect) Layout(gtx C) D {
 					// add a click handler to gateway
 					dims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 						layout.Rigid(material.H6(th, gw).Layout),
+						// TODO: add other details such as geolocation, IP, etc
+						layout.Rigid(func(gtx C) D {
+							return layout.UniformInset(unit.Dp(10)).Layout(gtx, material.H6(th, "location: DE").Layout)
+						}),
 					)
 
 					a := clip.Rect(image.Rectangle{Max: dims.Size})
