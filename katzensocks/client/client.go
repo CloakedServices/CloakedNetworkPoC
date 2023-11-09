@@ -145,6 +145,14 @@ func (c *Client) Topup(id []byte) chan error {
 			return
 		}
 		c.Unlock()
+		// we first create an invoice and wait for it to be paid (will be paid automatically for testing)
+		invoice_request := cashu.InvoiceRequest{Amount: 100}
+		resp, err := c.cashuClient.CreateInvoice(invoice_request)
+		if err != nil {
+			c.log.Error("topup cashu, CreateInvoice: %v", err)
+			return
+		}
+		c.log.Infof("Invoice: %+v\n", resp.PaymentRequest)
 
 		send_request := cashu.SendRequest{Amount: 1}
 		send_resp, err := c.cashuClient.SendToken(send_request)
