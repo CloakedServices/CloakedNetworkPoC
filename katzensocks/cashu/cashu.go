@@ -1,4 +1,4 @@
-package cashu
+package main
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 // Client manages communication with the API.
@@ -177,7 +178,8 @@ func (c *CashuApiClient) CreateInvoice(request InvoiceRequest) (*InvoiceResponse
 			fmt.Println("Invoice paid!")
 			break
 		} else {
-			fmt.Println("Invoice not paid yet")
+			fmt.Printf("Invoice not paid yet: %v", paymentStatus)
+			time.Sleep(1 * time.Second)
 		}
 	}
 	// }()
