@@ -178,7 +178,7 @@ func (c *CashuApiClient) CreateInvoice(request InvoiceRequest) (*InvoiceResponse
 			fmt.Println("Invoice paid!")
 			break
 		} else {
-			fmt.Printf("Invoice not paid yet: %v", paymentStatus)
+			fmt.Printf("Invoice not paid yet: %v\n", paymentStatus)
 			time.Sleep(1 * time.Second)
 		}
 	}
