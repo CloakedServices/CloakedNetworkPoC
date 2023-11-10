@@ -17,6 +17,7 @@
 package client
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 	cConstants "github.com/katzenpost/katzenpost/client/constants"
 	"github.com/katzenpost/katzenpost/core/crypto/rand"
 	sConstants "github.com/katzenpost/katzenpost/core/sphinx/constants"
+	"github.com/katzenpost/katzenpost/core/epochtime"
 )
 
 var ErrReplyTimeout = errors.New("failure waiting for reply, timeout reached")
@@ -216,6 +218,12 @@ func (s *Session) SendUnreliableMessage(recipient, provider string, message []by
 }
 
 func (s *Session) BlockingSendUnreliableMessage(recipient, provider string, message []byte) ([]byte, error) {
+	ctx, cancelFn := context.WithTimeout(context.Background(), epochtime.Period/32)
+	defer cancelFn()
+	return s.BlockingSendUnreliableMessageWithContext(ctx, recipient, provider, message)
+}
+
+func (s *Session) BlockingSendUnreliableMessageWithContext(ctx context.Context, recipient, provider string, message []byte) ([]byte, error) {
 	msg, err := s.composeMessage(recipient, provider, message, true)
 	if err != nil {
 		return nil, err
@@ -247,7 +255,7 @@ func (s *Session) BlockingSendUnreliableMessage(recipient, provider string, mess
 		return reply, nil
 	case <-s.HaltCh():
 		return nil, ErrHalted
-	case <-time.After(8*sentMessage.ReplyETA + sentMessage.ReplyETA>>1):
+	case <-ctx.Done():
 		return nil, ErrReplyTimeout
 	}
 	// unreachable
