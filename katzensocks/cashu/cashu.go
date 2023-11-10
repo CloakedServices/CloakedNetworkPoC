@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 // Client manages communication with the API.
@@ -165,22 +166,23 @@ func (c *CashuApiClient) CreateInvoice(request InvoiceRequest) (*InvoiceResponse
 		return nil, err
 	}
 
-	go func() {
-		fmt.Printf("Checking invoice %s\n", response.CheckingId)
-		for {
-			paymentStatus, err := c.CheckInvoice(response)
-			if err != nil {
-				fmt.Println("Error checking invoice:", err)
-				return
-			}
-			if paymentStatus.Paid {
-				fmt.Println("Invoice paid!")
-				return
-			} else {
-				fmt.Println("Invoice not paid yet")
-			}
+	// go func() {
+	fmt.Printf("Checking invoice %s\n", response.CheckingId)
+	for {
+		paymentStatus, err := c.CheckInvoice(response)
+		if err != nil {
+			fmt.Println("Error checking invoice:", err)
+			return nil, err
 		}
-	}()
+		if paymentStatus.Paid {
+			fmt.Println("Invoice paid!")
+			break
+		} else {
+			fmt.Printf("Invoice not paid yet: %v\n", paymentStatus)
+			time.Sleep(1 * time.Second)
+		}
+	}
+	// }()
 
 	return &response, nil
 }
@@ -307,22 +309,22 @@ func main() {
 	}
 	fmt.Printf("Balance: %+v\n", balance.Balance)
 
-	// invoice_request := InvoiceRequest{Amount: 100}
-	// resp, err := client.CreateInvoice(invoice_request)
-	// if err != nil {
-	// 	fmt.Println("Invoice Error:", err)
-	// 	return
-	// }
+	invoice_request := InvoiceRequest{Amount: 100}
+	resp, err := client.CreateInvoice(invoice_request)
+	if err != nil {
+		fmt.Println("Invoice Error:", err)
+		return
+	}
 
-	// fmt.Printf("Invoice: %+v\n", resp.PaymentRequest)
+	fmt.Printf("Invoice: %+v\n", resp.PaymentRequest)
 
-	// // get balance and print
-	// balance, err = client.GetBalance()
-	// if err != nil {
-	// 	fmt.Println("Balance Error:", err)
-	// 	return
-	// }
-	// fmt.Printf("Balance: %+v\n", balance.Balance)
+	// get balance and print
+	balance, err = client.GetBalance()
+	if err != nil {
+		fmt.Println("Balance Error:", err)
+		return
+	}
+	fmt.Printf("Balance: %+v\n", balance.Balance)
 
 	send_request := SendRequest{Amount: 1}
 	send_resp, err := client.SendToken(send_request)

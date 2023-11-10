@@ -75,7 +75,7 @@ type Server struct {
 	payloadLen  int
 	cashuClient *cashu.CashuApiClient
 	sessions    *sync.Map
-	write func(cborplugin.Command)
+	write       func(cborplugin.Command)
 }
 
 // NewServer instantiates the Katzensocks Kaetzchen responder
@@ -514,6 +514,7 @@ func (s *Server) findSession(id []byte) (*Session, error) {
 }
 
 func (s *Server) topup(cmd *TopupCommand) (cborplugin.Command, error) {
+	s.log.Debugf("Received TopupCommand(%x, %x)", cmd.ID, cmd.Nuts[:16])
 	// validate topup
 	cashuTokenStr := string(cmd.Nuts)
 	permissive := true // topups always succeed
@@ -524,8 +525,6 @@ func (s *Server) topup(cmd *TopupCommand) (cborplugin.Command, error) {
 			return &TopupResponse{Status: TopupFailure}, nil
 		}
 	}
-
-	s.log.Debugf("Received TopupCommand(%x, %x)", cmd.ID, cmd.Nuts[:16])
 
 	if ss, ok := s.sessions.Load(string(cmd.ID)); ok {
 		if ses, ok := ss.(*Session); ok {
@@ -590,7 +589,7 @@ func (s *Server) proxyWorker(a, b net.Conn) chan error {
 	return errCh
 }
 
-func (s *Server) proxy(cmd *ProxyCommand) (cborplugin.Command, error){
+func (s *Server) proxy(cmd *ProxyCommand) (cborplugin.Command, error) {
 	// deserialize cmd as a ProxyResponse
 	reply := &ProxyResponse{}
 	s.log.Debugf("Received ProxyCommand: %x", cmd.ID)
