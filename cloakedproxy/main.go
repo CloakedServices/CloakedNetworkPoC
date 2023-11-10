@@ -425,6 +425,7 @@ func (a *App) run() error {
 		case <-time.After(60 * time.Second):
 			if *cli {
 				invoice.get() // request new invoice
+				wallet.update()
 				fmt.Printf("balance: %s", wallet.Balance())
 				invoice.QRText()
 			}
@@ -461,6 +462,7 @@ func (a *App) Update(gtx layout.Context) {
 	portSelect.Update()
 	gatewaySelect.update(a, gtx)
 	invoice.update(gtx)
+	wallet.update()
 	connectSwitch.update(a)
 }
 
