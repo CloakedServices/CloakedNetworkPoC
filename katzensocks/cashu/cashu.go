@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 )
 
 // Client manages communication with the API.
@@ -167,21 +166,21 @@ func (c *CashuApiClient) CreateInvoice(request InvoiceRequest) (*InvoiceResponse
 	}
 
 	// go func() {
-	fmt.Printf("Checking invoice %s\n", response.CheckingId)
-	for {
-		paymentStatus, err := c.CheckInvoice(response)
-		if err != nil {
-			fmt.Println("Error checking invoice:", err)
-			return nil, err
-		}
-		if paymentStatus.Paid {
-			fmt.Println("Invoice paid!")
-			break
-		} else {
-			fmt.Printf("Invoice not paid yet: %v\n", paymentStatus)
-			time.Sleep(1 * time.Second)
-		}
-	}
+	// fmt.Printf("Checking invoice %s\n", response.CheckingId)
+	// for {
+	// 	paymentStatus, err := c.CheckInvoice(response)
+	// 	if err != nil {
+	// 		fmt.Println("Error checking invoice:", err)
+	// 		return nil, err
+	// 	}
+	// 	if paymentStatus.Paid {
+	// 		fmt.Println("Invoice paid!")
+	// 		break
+	// 	} else {
+	// 		fmt.Printf("Invoice not paid yet: %v\n", paymentStatus)
+	// 		time.Sleep(1 * time.Second)
+	// 	}
+	// }
 	// }()
 
 	return &response, nil

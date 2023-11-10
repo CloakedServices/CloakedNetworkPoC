@@ -156,14 +156,18 @@ func (c *Client) Topup(id []byte) chan error {
 			return
 		}
 		if balance.Balance < SATOSHIS_PER_REQUEST {
-			c.log.Infof("Balance too low: %d sats, creating Lightning invoice\n", balance.Balance)
-			invoice_request := cashu.InvoiceRequest{Amount: DEPOSIT_LIGHTNING_SATS}
-			resp, err := c.cashuClient.CreateInvoice(invoice_request)
-			if err != nil {
-				c.log.Error("topup cashu, CreateInvoice: %v", err)
-				return
-			}
-			c.log.Infof("Invoice: %+v\n", resp.PaymentRequest)
+			// this should prompt the user to create a lightning invoice
+			// after creating the invoice with cashu.CreateInvoice and displaying to user
+			// it should call cashu.CheckInvoice repeatedly until the invoice is paid
+
+			// c.log.Infof("Balance too low: %d sats, creating Lightning invoice\n", balance.Balance)
+			// invoice_request := cashu.InvoiceRequest{Amount: DEPOSIT_LIGHTNING_SATS}
+			// resp, err := c.cashuClient.CreateInvoice(invoice_request)
+			// if err != nil {
+			// 	c.log.Error("topup cashu, CreateInvoice: %v", err)
+			// 	return
+			// }
+			// c.log.Infof("Invoice: %+v\n", resp.PaymentRequest)
 		}
 
 		send_request := cashu.SendRequest{Amount: SATOSHIS_PER_REQUEST}
