@@ -134,6 +134,9 @@ func NewClient(s *client.Session) (*Client, error) {
 
 // topup sends a TopupCommand and returns a channel. err nil means success.
 func (c *Client) Topup(id []byte) chan error {
+	const SATOSHIS_PER_REQUEST = 1
+	const DEPOSIT_LIGHTNING_SATS = 100
+
 	errCh := make(chan error)
 	go func() {
 		defer close(errCh)
@@ -145,8 +148,25 @@ func (c *Client) Topup(id []byte) chan error {
 			return
 		}
 		c.Unlock()
+		// we check the balance to check if we need a lightning deposit
+		// get balance and print
+		balance, err := c.cashuClient.GetBalance()
+		if err != nil {
+			c.log.Error("topup cashu, Balance Error:", err)
+			return
+		}
+		if balance.Balance < SATOSHIS_PER_REQUEST {
+			c.log.Infof("Balance too low: %d sats, creating Lightning invoice\n", balance.Balance)
+			invoice_request := cashu.InvoiceRequest{Amount: DEPOSIT_LIGHTNING_SATS}
+			resp, err := c.cashuClient.CreateInvoice(invoice_request)
+			if err != nil {
+				c.log.Error("topup cashu, CreateInvoice: %v", err)
+				return
+			}
+			c.log.Infof("Invoice: %+v\n", resp.PaymentRequest)
+		}
 
-		send_request := cashu.SendRequest{Amount: 1}
+		send_request := cashu.SendRequest{Amount: SATOSHIS_PER_REQUEST}
 		send_resp, err := c.cashuClient.SendToken(send_request)
 		nuts := make([]byte, 512)
 		if err != nil {
