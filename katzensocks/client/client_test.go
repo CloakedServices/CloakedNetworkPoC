@@ -62,13 +62,23 @@ func TestDockerTopup(t *testing.T) {
 
 	// get a handle to dockerized cashu wallet and add some credit
 	w := cashu.NewCashuApiClient(nil, cashuWalletUrl)
-	r, err := w.GetBalance()
+	b1, err := w.GetBalance()
 	require.NoError(err)
-	require.Equal(r.Balance, 0)
 	req := cashu.InvoiceRequest{Amount: 42}
 	resp, err := w.CreateInvoice(req)
 	require.NoError(err)
-	require.Equal(resp.Amount, 42)
+	require.True(resp.Ok)
+
+	// check that the invoice was paid
+	status, err := w.CheckInvoice(*resp)
+	require.NoError(err)
+
+	// verify that the invoice was paid
+	require.True(status.Paid)
+
+	// Verify the balance has increased
+	b2, err := w.GetBalance()
+	require.Equal(b2.Balance, b1.Balance+42)
 
 	// create a new session and add some credit
 	id, err := c.NewSession()
