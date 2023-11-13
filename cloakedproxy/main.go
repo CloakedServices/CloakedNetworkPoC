@@ -155,7 +155,9 @@ func (i *Invoice) QR() (*qrcode.QRCode, error) {
 func (i *Invoice) QRText() {
 	i.Lock()
 	defer i.Unlock()
-	qrterminal.Generate(i.invoiceResponse.PaymentRequest, qrterminal.L, os.Stdout)
+	if i.invoiceResponse != nil {
+		qrterminal.Generate(i.invoiceResponse.PaymentRequest, qrterminal.L, os.Stdout)
+	}
 }
 
 func (i *Invoice) layoutQr(gtx C) D {
@@ -188,6 +190,7 @@ func (i *Invoice) layoutQr(gtx C) D {
 }
 
 func (i *Invoice) get() {
+	log.Printf("getting new invoice")
 	i.Lock()
 	amount := i.amount
 	i.Unlock()
@@ -202,26 +205,36 @@ func (i *Invoice) get() {
 	}
 }
 
+func (i *Invoice) check() bool {
+	// if we have an invoice that isn't paid, check the invoice
+	i.Lock()
+	r := i.invoiceResponse
+	i.Unlock()
+	if r == nil {
+		return false
+	}
+	if r.CheckingId != "" {
+		// this is blocking, we should instead wrap with a select {channel/default}
+		payStatus, err := cwallet.CheckInvoice(*r)
+		if err != nil {
+			return false
+		}
+		if payStatus.Paid {
+			log.Printf("invoice was paid")
+			return true
+		}
+	}
+	return false
+}
+
 func (i *Invoice) update(gtx layout.Context) {
 	// request a new invoice if clicked
 	for _, e := range i.clicked.Events(gtx.Queue) {
 		if e.Type == gesture.TypeClick {
 			// if we have an invoice that isn't paid, check the invoice
-			i.Lock()
-			r := i.invoiceResponse
-			i.Unlock()
-			if r.CheckingId != "" {
-				// this is blocking, we should instead wrap with a select {channel/default}
-				payStatus, err := cwallet.CheckInvoice(*r)
-				if err != nil {
-					break
-				}
-				if !payStatus.Paid {
-					break
-				}
+			if i.check() {
+				go i.get()
 			}
-			//otherwise get a new invoice
-			go i.get()
 			break
 		}
 	}
@@ -413,6 +426,21 @@ type App struct {
 	clicked     chan struct{}
 }
 
+func (a *App) runCli() {
+	for {
+		select {
+		case <-a.HaltCh():
+			return
+		case <-time.After(5 * time.Second):
+			if invoice.check() {
+				go invoice.get()
+			}
+			wallet.update()
+			invoice.QRText() // draw the QRcode over logspam
+		}
+	}
+}
+
 func (a *App) run() error {
 
 	// fetch an inital invoice and gateway list
@@ -435,18 +463,12 @@ func (a *App) run() error {
 	for {
 		select {
 		case e := <-a.w.Events():
+			fmt.Printf("evt")
 			if err := a.handleGioEvents(e); err != nil {
 				return err
 			}
 		case <-a.HaltCh():
 			return errors.New("Halted")
-		case <-time.After(60 * time.Second):
-			if *cli {
-				invoice.get() // request new invoice
-				wallet.update()
-				fmt.Printf("balance: %s", wallet.Balance())
-				invoice.QRText()
-			}
 		}
 	}
 }
@@ -630,6 +652,7 @@ func main() {
 		}
 
 		a.doConnectClick()
+		a.Go(a.runCli)
 		a.Wait()
 		return
 	}
