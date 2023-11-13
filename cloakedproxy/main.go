@@ -230,13 +230,16 @@ func (i *Invoice) check() bool {
 	return false
 }
 
-func (i *Invoice) update(gtx layout.Context) {
+func (i *Invoice) update(a *App, gtx layout.Context) {
 	// request a new invoice if clicked
 	for _, e := range i.clicked.Events(gtx.Queue) {
 		if e.Type == gesture.TypeClick {
 			// if we have an invoice that isn't paid, check the invoice
 			if i.check() {
-				go i.get()
+				go func() {
+					i.get()
+					a.w.Invalidate()
+				}()
 			}
 			break
 		}
@@ -504,7 +507,7 @@ func (a *App) handleGioEvents(e interface{}) error {
 func (a *App) Update(gtx layout.Context) {
 	portSelect.Update()
 	gatewaySelect.update(a, gtx)
-	invoice.update(gtx)
+	invoice.update(a, gtx)
 	wallet.update()
 	connectSwitch.update(a)
 }
