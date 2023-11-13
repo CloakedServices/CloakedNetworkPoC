@@ -136,9 +136,9 @@ type Invoice struct {
 	// casu.Invoice Response
 	// casu.Payment Status
 	sync.Mutex
-	paymentRequest string
-	amount         int64
-	amountEd       *widget.Editor
+	invoiceResponse *cashu.InvoiceResponse
+	amount          int64
+	amountEd        *widget.Editor
 
 	clicked *gesture.Click
 }
@@ -146,13 +146,16 @@ type Invoice struct {
 func (i *Invoice) QR() (*qrcode.QRCode, error) {
 	i.Lock()
 	defer i.Unlock()
-	return qrcode.New(i.paymentRequest, qrcode.High)
+	if i.invoiceResponse == nil {
+		return nil, errors.New("No Invoice")
+	}
+	return qrcode.New(i.invoiceResponse.PaymentRequest, qrcode.High)
 }
 
 func (i *Invoice) QRText() {
 	i.Lock()
 	defer i.Unlock()
-	qrterminal.Generate(i.paymentRequest, qrterminal.L, os.Stdout)
+	qrterminal.Generate(i.invoiceResponse.PaymentRequest, qrterminal.L, os.Stdout)
 }
 
 func (i *Invoice) layoutQr(gtx C) D {
@@ -194,7 +197,7 @@ func (i *Invoice) get() {
 		log.Print(err)
 	} else {
 		i.Lock()
-		i.paymentRequest = resp.PaymentRequest
+		i.invoiceResponse = resp
 		i.Unlock()
 	}
 }
@@ -203,6 +206,21 @@ func (i *Invoice) update(gtx layout.Context) {
 	// request a new invoice if clicked
 	for _, e := range i.clicked.Events(gtx.Queue) {
 		if e.Type == gesture.TypeClick {
+			// if we have an invoice that isn't paid, check the invoice
+			i.Lock()
+			r := i.invoiceResponse
+			i.Unlock()
+			if r.CheckingId != "" {
+				// this is blocking, we should instead wrap with a select {channel/default}
+				payStatus, err := cwallet.CheckInvoice(*r)
+				if err != nil {
+					break
+				}
+				if !payStatus.Paid {
+					break
+				}
+			}
+			//otherwise get a new invoice
 			go i.get()
 			break
 		}
