@@ -353,7 +353,7 @@ func (g *GatewaySelect) Layout(gtx C) D {
 					nodeLayout := func(gtx C) D {
 						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 							layout.Rigid(material.H6(th, g.gateways[i].Provider).Layout),
-							layout.Rigid(material.H6(th, "location: DE").Layout),
+							// layout.Rigid(material.H6(th, "location: DE").Layout),
 						)
 					}
 					var dims layout.Dimensions
