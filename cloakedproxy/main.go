@@ -33,8 +33,11 @@ import (
 	"image/color"
 	"log"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"net/netip"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -136,9 +139,9 @@ type Invoice struct {
 	// casu.Invoice Response
 	// casu.Payment Status
 	sync.Mutex
-	paymentRequest string
-	amount         int64
-	amountEd       *widget.Editor
+	invoiceResponse *cashu.InvoiceResponse
+	amount          int64
+	amountEd        *widget.Editor
 
 	clicked *gesture.Click
 }
@@ -146,13 +149,18 @@ type Invoice struct {
 func (i *Invoice) QR() (*qrcode.QRCode, error) {
 	i.Lock()
 	defer i.Unlock()
-	return qrcode.New(i.paymentRequest, qrcode.High)
+	if i.invoiceResponse == nil {
+		return nil, errors.New("No Invoice")
+	}
+	return qrcode.New(i.invoiceResponse.PaymentRequest, qrcode.High)
 }
 
 func (i *Invoice) QRText() {
 	i.Lock()
 	defer i.Unlock()
-	qrterminal.Generate(i.paymentRequest, qrterminal.L, os.Stdout)
+	if i.invoiceResponse != nil {
+		qrterminal.Generate(i.invoiceResponse.PaymentRequest, qrterminal.L, os.Stdout)
+	}
 }
 
 func (i *Invoice) layoutQr(gtx C) D {
@@ -185,6 +193,7 @@ func (i *Invoice) layoutQr(gtx C) D {
 }
 
 func (i *Invoice) get() {
+	log.Printf("getting new invoice")
 	i.Lock()
 	amount := i.amount
 	i.Unlock()
@@ -194,16 +203,41 @@ func (i *Invoice) get() {
 		log.Print(err)
 	} else {
 		i.Lock()
-		i.paymentRequest = resp.PaymentRequest
+		i.invoiceResponse = resp
 		i.Unlock()
 	}
+}
+
+func (i *Invoice) check() bool {
+	// if we have an invoice that isn't paid, check the invoice
+	i.Lock()
+	r := i.invoiceResponse
+	i.Unlock()
+	if r == nil {
+		return false
+	}
+	if r.CheckingId != "" {
+		// this is blocking, we should instead wrap with a select {channel/default}
+		payStatus, err := cwallet.CheckInvoice(*r)
+		if err != nil {
+			return false
+		}
+		if payStatus.Paid {
+			log.Printf("invoice was paid")
+			return true
+		}
+	}
+	return false
 }
 
 func (i *Invoice) update(gtx layout.Context) {
 	// request a new invoice if clicked
 	for _, e := range i.clicked.Events(gtx.Queue) {
 		if e.Type == gesture.TypeClick {
-			go i.get()
+			// if we have an invoice that isn't paid, check the invoice
+			if i.check() {
+				go i.get()
+			}
 			break
 		}
 	}
@@ -353,7 +387,7 @@ func (g *GatewaySelect) Layout(gtx C) D {
 					nodeLayout := func(gtx C) D {
 						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 							layout.Rigid(material.H6(th, g.gateways[i].Provider).Layout),
-							layout.Rigid(material.H6(th, "location: DE").Layout),
+							// layout.Rigid(material.H6(th, "location: DE").Layout),
 						)
 					}
 					var dims layout.Dimensions
@@ -395,6 +429,21 @@ type App struct {
 	clicked     chan struct{}
 }
 
+func (a *App) runCli() {
+	for {
+		select {
+		case <-a.HaltCh():
+			return
+		case <-time.After(5 * time.Second):
+			if invoice.check() {
+				go invoice.get()
+			}
+			wallet.update()
+			invoice.QRText() // draw the QRcode over logspam
+		}
+	}
+}
+
 func (a *App) run() error {
 
 	// fetch an inital invoice and gateway list
@@ -417,18 +466,12 @@ func (a *App) run() error {
 	for {
 		select {
 		case e := <-a.w.Events():
+			fmt.Printf("evt")
 			if err := a.handleGioEvents(e); err != nil {
 				return err
 			}
 		case <-a.HaltCh():
 			return errors.New("Halted")
-		case <-time.After(60 * time.Second):
-			if *cli {
-				invoice.get() // request new invoice
-				wallet.update()
-				fmt.Printf("balance: %s", wallet.Balance())
-				invoice.QRText()
-			}
 		}
 	}
 }
@@ -568,6 +611,14 @@ func (a *App) doConnectClick() {
 func main() {
 	flag.IntVar(&invoiceAmount, "a", 42, "Amount of Cashu to make a lightning invoice for")
 	flag.Parse()
+	if *debug != 0 {
+		go func() {
+			http.ListenAndServe(fmt.Sprintf("localhost:%d", *debug), nil)
+		}()
+		runtime.SetMutexProfileFraction(1)
+		runtime.SetBlockProfileRate(1)
+	}
+
 	invoice.amountEd.SetText(fmt.Sprintf("%d", invoiceAmount))
 	portSelect.Editor.SetText(fmt.Sprintf("%d", *socksPort))
 	if *cli {
@@ -612,6 +663,7 @@ func main() {
 		}
 
 		a.doConnectClick()
+		a.Go(a.runCli)
 		a.Wait()
 		return
 	}
