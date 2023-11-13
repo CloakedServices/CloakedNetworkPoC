@@ -33,8 +33,11 @@ import (
 	"image/color"
 	"log"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"net/netip"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -608,6 +611,14 @@ func (a *App) doConnectClick() {
 func main() {
 	flag.IntVar(&invoiceAmount, "a", 42, "Amount of Cashu to make a lightning invoice for")
 	flag.Parse()
+	if *debug != 0 {
+		go func() {
+			http.ListenAndServe(fmt.Sprintf("localhost:%d", *debug), nil)
+		}()
+		runtime.SetMutexProfileFraction(1)
+		runtime.SetBlockProfileRate(1)
+	}
+
 	invoice.amountEd.SetText(fmt.Sprintf("%d", invoiceAmount))
 	portSelect.Editor.SetText(fmt.Sprintf("%d", *socksPort))
 	if *cli {
