@@ -528,10 +528,10 @@ func (a *App) Layout(gtx C) {
 		layout.Rigid(connectSwitch.Layout),
 		// wallet balance
 		layout.Rigid(wallet.Layout),
+		// layout the exit node selection
+		layout.Rigid(gatewaySelect.Layout),
 		// layout add credit topup invoice
 		layout.Flexed(1, invoice.Layout),
-		// layout the exit node selection
-		layout.Flexed(1, gatewaySelect.Layout),
 	)
 }
 
