@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -629,6 +630,43 @@ func cfgLinkKey(cfg interface{}, outDir string) wire.PublicKey {
 	return linkPubKey
 }
 
+func (s *katzenpost) generateCashuEnv(filename string) (string, error) {
+	// Open the .env file
+	file, err := os.Open(".env")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return "", err
+	}
+	defer file.Close()
+	// Create a scanner to read the file
+	scanner := bufio.NewScanner(file)
+
+	// String to store the final result
+	var result string
+
+	// Read the file line by line
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Trim whitespace and skip empty lines
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Format the line and append it to the result
+		result += fmt.Sprintf("     - %s\n", line)
+	}
+
+	// Check for errors during scanning
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error reading file:", err)
+		return "", err
+	}
+
+	return result, nil
+}
+
 func (s *katzenpost) genDockerCompose(dockerImage string) error {
 	dest := filepath.Join(s.outDir, "docker-compose.yml")
 	log.Printf("writing %s", dest)
@@ -763,8 +801,9 @@ services:
      - "4242/tcp"
 `, "katzensocks", dockerImage, s.baseDir, s.baseDir, s.binSuffix, s.baseDir)
 
+	env_vars, err := s.generateCashuEnv(".env-mint")
 	// add cashu mint
-	write(f, `
+	write(f, fmt.Sprintf(`
   cashu_mint:
     restart: on-failure
     image: cashu
@@ -772,16 +811,13 @@ services:
     expose:
      - "3338/tcp"
     environment:
-     - MINT_LIGHTNING_BACKEND=FakeWallet
-     - MINT_PRIVATE_KEY=TEST_PRIVATE_KEY
-     - MINT_LISTEN_HOST=0.0.0.0
-     - MINT_LISTEN_PORT=3338
-     - TOR=False
+     %s
     command: ["poetry", "run", "mint"]
-`)
+`), env_vars)
 
+	env_vars_client, err := s.generateCashuEnv(".env-client")
 	// add client cashu wallet
-	write(f, `
+	write(f, fmt.Sprintf(`
   client_cashu_wallet:
     restart: "no"
     image: cashu
@@ -789,16 +825,13 @@ services:
     expose:
      - "4448/tcp"
     environment:
-      - HTTP_PROXY=http://127.0.0.1:8080
-      - MINT_URL=http://127.0.0.1:3338
-      - API_HOST=127.0.0.1
-      - API_PORT=4448
-      - TOR=False
+      %s
     command: ["poetry", "run", "cashu", "-d"]
-`)
+`), env_vars_client)
 
+	env_vars_server, err := s.generateCashuEnv(".env-server")
 	// add server cashu wallet
-	write(f, `
+	write(f, fmt.Sprintf(`
   server_cashu_wallet:
     restart: "no"
     image: cashu
@@ -812,6 +845,6 @@ services:
       - API_PORT=4449
       - TOR=False
     command: ["poetry", "run", "cashu", "-d"]
-`)
+`), env_vars_server)
 	return nil
 }
