@@ -803,7 +803,7 @@ services:
 
 	env_vars, err := s.generateCashuEnv(".env-mint")
 	// add cashu mint
-	write(f, fmt.Sprintf(`
+	write(f, `
   cashu_mint:
     restart: on-failure
     image: cashu
@@ -811,13 +811,13 @@ services:
     expose:
      - "3338/tcp"
     environment:
-     %s
+%s
     command: ["poetry", "run", "mint"]
-`), env_vars)
+`, env_vars)
 
 	env_vars_client, err := s.generateCashuEnv(".env-client")
 	// add client cashu wallet
-	write(f, fmt.Sprintf(`
+	write(f, `
   client_cashu_wallet:
     restart: "no"
     image: cashu
@@ -825,13 +825,13 @@ services:
     expose:
      - "4448/tcp"
     environment:
-      %s
+%s
     command: ["poetry", "run", "cashu", "-d"]
-`), env_vars_client)
+`, env_vars_client)
 
 	env_vars_server, err := s.generateCashuEnv(".env-server")
 	// add server cashu wallet
-	write(f, fmt.Sprintf(`
+	write(f, `
   server_cashu_wallet:
     restart: "no"
     image: cashu
@@ -839,12 +839,8 @@ services:
     expose:
      - "4449/tcp"
     environment:
-      - HTTP_PROXY=http://127.0.0.1:8081
-      - MINT_URL=http://127.0.0.1:3338
-      - API_HOST=127.0.0.1
-      - API_PORT=4449
-      - TOR=False
+%s
     command: ["poetry", "run", "cashu", "-d"]
-`), env_vars_server)
+`, env_vars_server)
 	return nil
 }
