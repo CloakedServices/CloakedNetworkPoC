@@ -802,6 +802,9 @@ services:
 `, "katzensocks", dockerImage, s.baseDir, s.baseDir, s.binSuffix, s.baseDir)
 
 	env_vars, err := s.generateCashuEnv(".env-mint")
+	if err != nil {
+		log.Fatal(err)
+	}
 	// add cashu mint
 	write(f, `
   cashu_mint:
@@ -816,6 +819,9 @@ services:
 `, env_vars)
 
 	env_vars_client, err := s.generateCashuEnv(".env-client")
+	if err != nil {
+		log.Fatal(err)
+	}
 	// add client cashu wallet
 	write(f, `
   client_cashu_wallet:
@@ -830,6 +836,9 @@ services:
 `, env_vars_client)
 
 	env_vars_server, err := s.generateCashuEnv(".env-server")
+	if err != nil {
+		log.Fatal(err)
+	}
 	// add server cashu wallet
 	write(f, `
   server_cashu_wallet:
