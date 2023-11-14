@@ -389,6 +389,26 @@ func main() {
 	lM := flag.Float64("lM", 0.2, "Inverse of mean of mix decoy send rate")
 	lMMax := flag.Uint64("lMMax", 100, "Maximum delay for LambdaM")
 
+	// cashu mint option
+	mintInfoName := flag.String("mint_info_name", "", "The mint name")
+	mintInfoDesc := flag.String("mint_info_desc", "", "The short mint description")
+	mintInfoDescLong := flag.String("mint_info_desc_long", "", "A long mint description")
+	mintInfoContact := flag.String("mint_info_contact", "", "mint contact info")
+	mintInfoMotd := flag.String("mint_info_motd", "", "Message to users")
+	mintHost := flag.String("mint_host", "127.0.0.1", "Wallet: Mint address")
+	mintPort := flag.Int("mint_port", 3338, "Wallet: Mint listening port")
+	mintLightningBackend := flag.String("mint_lightning_backend", "FakeWallet", "Backend: FakeWallet or LNbitsWallet")
+	mintLNBitsEndpoint := flag.String("mint_lnbits_endpoint", "LNbits endpoint")
+	mintPrivateKey := flag.String("mint_private_key", "TEST_PRIVATE_KEY", "Mint private key")
+	mintListenPort := flag.Int("mint_listen_port", 3338, "Mint: listening port")
+	mintHttpProxy := flag.String("mint_http_proxy", "", "Mint: http proxy")
+	mintLightningFeePercent := flag.Float64("mint_lightning_fee_percent", 1.0, "Mint lightning fee percent")
+	mintLightningReserveFeeMin := flag.Int("mint_lightning_reserve_fee_min", 2000, "lightning reserve fee min")
+
+	// cashu wallet options
+	walletApiPort := flag.Int("wallet_api_port", 4448, "Wallet API listening port")
+	walletHttpProxy := flag.String("wallet_http_proxy", "", "")
+
 	flag.Parse()
 
 	if *kem == "" && *nike == "" {
