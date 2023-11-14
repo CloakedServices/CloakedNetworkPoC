@@ -801,7 +801,7 @@ services:
      - "4242/tcp"
 `, "katzensocks", dockerImage, s.baseDir, s.baseDir, s.binSuffix, s.baseDir)
 
-	env_vars, err := s.generateCashuEnv("/genconfig/.env-mint")
+	env_vars, err := s.generateCashuEnv("../genconfig/.env-mint")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -818,7 +818,7 @@ services:
     command: ["poetry", "run", "mint"]
 `, env_vars)
 
-	env_vars_client, err := s.generateCashuEnv("/genconfig/.env-client")
+	env_vars_client, err := s.generateCashuEnv("../genconfig/.env-client")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -835,7 +835,7 @@ services:
     command: ["poetry", "run", "cashu", "-d"]
 `, env_vars_client)
 
-	env_vars_server, err := s.generateCashuEnv("/genconfig/.env-server")
+	env_vars_server, err := s.generateCashuEnv("../genconfig/.env-server")
 	if err != nil {
 		log.Fatal(err)
 	}
