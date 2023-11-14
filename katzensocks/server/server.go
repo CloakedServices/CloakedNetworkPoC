@@ -514,9 +514,24 @@ func (s *Server) findSession(id []byte) (*Session, error) {
 }
 
 func (s *Server) topup(cmd *TopupCommand) (cborplugin.Command, error) {
+	const SATOSHIS_PER_REQUEST = 1
 	s.log.Debugf("Received TopupCommand(%x, %x)", cmd.ID, cmd.Nuts[:16])
 	// validate topup
 	cashuTokenStr := string(cmd.Nuts)
+	// parse token and sum proofs
+	tokens := cashu.NewTokens(cashuTokenStr)
+	sum_amount := 0
+	for _, token := range tokens.Token {
+		for _, proof := range token.Proofs {
+			sum_amount += int(proof.Amount)
+		}
+	}
+
+	if sum_amount < SATOSHIS_PER_REQUEST {
+		s.log.Errorf("Insufficient top up. Want %d sats, got %d sats: %x", SATOSHIS_PER_REQUEST, sum_amount, cmd.ID)
+		return &TopupResponse{Status: TopupFailure}, nil
+	}
+
 	permissive := true // topups always succeed
 	_, err := s.cashuClient.Receive(cashu.ReceiveParameters{Token: &cashuTokenStr})
 	if err != nil {
