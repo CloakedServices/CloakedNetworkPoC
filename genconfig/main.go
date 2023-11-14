@@ -632,7 +632,7 @@ func cfgLinkKey(cfg interface{}, outDir string) wire.PublicKey {
 
 func (s *katzenpost) generateCashuEnv(filename string) (string, error) {
 	// Open the .env file
-	file, err := os.Open(".env")
+	file, err := os.Open(filename)
 	if err != nil {
 		fmt.Println("Error opening file:", err)
 		return "", err
