@@ -42,13 +42,59 @@ import (
 	sConfig "github.com/katzenpost/katzenpost/server/config"
 )
 
-const (
-	basePort      = 30000
-	bindAddr      = "127.0.0.1"
-	nrLayers      = 3
-	nrNodes       = 6
-	nrProviders   = 2
-	nrAuthorities = 3
+var (
+	nrLayers                 = flag.Int("L", 3, "Number of layers.")
+	nrNodes                  = flag.Int("n", 6, "Number of mixes.")
+	nrProviders              = flag.Int("p", 2, "Number of providers.")
+	voting                   = flag.Bool("v", true, "Generate voting configuration")
+	nrVoting                 = flag.Int("nv", 3, "Generate voting configuration")
+	baseDir                  = flag.String("b", "", "Path to use as baseDir option")
+	basePort                 = flag.Int("P", 30000, "First port number to use")
+	bindAddr                 = flag.String("a", "127.0.0.1", "Address to bind to")
+	outDir                   = flag.String("o", "", "Path to write files to")
+	dockerImage              = flag.String("d", "katzenpost-go_mod", "Docker image for compose-compose")
+	binSuffix                = flag.String("S", "", "suffix for binaries in docker-compose.yml")
+	logLevel                 = flag.String("log_level", "DEBUG", "logging level could be set to: DEBUG, INFO, NOTICE, WARNING, ERROR, CRITICAL")
+	omitTopology             = flag.Bool("D", false, "Dynamic topology (omit fixed topology definition)")
+	onlyTransports           = flag.String("onlyTransports", validTransports(), "Specify transports used.")
+	kem                      = flag.String("kem", "", "Name of the KEM Scheme to be used with Sphinx")
+	nike                     = flag.String("nike", "x25519", "Name of the NIKE Scheme to be used with Sphinx")
+	UserForwardPayloadLength = flag.Int("UserForwardPayloadLength", 2000, "UserForwardPayloadLength")
+	sr                       = flag.Uint64("sr", 0, "Sendrate limit")
+	mu                       = flag.Float64("mu", 0.005, "Inverse of mean of per hop delay.")
+	muMax                    = flag.Uint64("muMax", 1000, "Maximum delay for Mu.")
+	lP                       = flag.Float64("lP", 0.001, "Inverse of mean for client send rate LambdaP")
+	lPMax                    = flag.Uint64("lPMax", 1000, "Maximum delay for LambdaP.")
+	lL                       = flag.Float64("lL", 0.0005, "Inverse of mean of loop decoy send rate LambdaL")
+	lLMax                    = flag.Uint64("lLMax", 1000, "Maximum delay for LambdaL")
+	lD                       = flag.Float64("lD", 0.0005, "Inverse of mean of drop decoy send rate LambdaD")
+	lDMax                    = flag.Uint64("lDMax", 3000, "Maximum delay for LambaD")
+	lM                       = flag.Float64("lM", 0.2, "Inverse of mean of mix decoy send rate")
+	lMMax                    = flag.Uint64("lMMax", 100, "Maximum delay for LambdaM")
+
+	// cashu mint option
+	mintInfoName               = flag.String("mint_info_name", "", "The mint name")
+	mintInfoDesc               = flag.String("mint_info_desc", "", "The short mint description")
+	mintInfoDescLong           = flag.String("mint_info_desc_long", "", "A long mint description")
+	mintInfoMotd               = flag.String("mint_info_motd", "", "Message to users")
+	mintHost                   = flag.String("mint_host", "127.0.0.1", "Wallet: Mint address")
+	mintPort                   = flag.Int("mint_port", 3338, "Wallet: Mint listening port")
+	mintLightningBackend       = flag.String("mint_lightning_backend", "FakeWallet", "Backend: FakeWallet or LNbitsWallet")
+	mintLNBitsEndpoint         = flag.String("mint_lnbits_endpoint", "", "LNbits endpoint")
+	mintPrivateKey             = flag.String("mint_private_key", "TEST_PRIVATE_KEY", "Mint private key")
+	mintListenHost             = flag.String("mint_listen_host", "127.0.0.1", "Mint: listening address")
+	mintListenPort             = flag.Int("mint_listen_port", 3338, "Mint: listening port")
+	mintHttpProxy              = flag.String("mint_http_proxy", "", "Mint: http proxy")
+	mintLightningFeePercent    = flag.Float64("mint_lightning_fee_percent", 1.0, "Mint lightning fee percent")
+	mintLightningReserveFeeMin = flag.Int("mint_lightning_reserve_fee_min", 2000, "lightning reserve fee min")
+
+	// cashu wallet options
+	clientWalletApiHost        = flag.String("client_wallet_api_host", "127.0.0.1", "Client Wallet API listening address")
+	clientWalletApiPort        = flag.Int("client_wallet_api_port", 4448, "Client Wallet API listening port")
+	katzensocksWalletApiHost   = flag.String("katzensocks_wallet_api_host", "127.0.0.1", "Client Wallet API listening address")
+	katzensocksWalletApiPort   = flag.Int("katzensocks_wallet_api_port", 4449, "Wallet API listening port for katzensocks service")
+	clientWalletHttpProxy      = flag.String("client_wallet_http_proxy", "", "")
+	katzensocksWalletHttpProxy = flag.String("katzensocks_wallet_http_proxy", "", "")
 )
 
 type katzenpost struct {
@@ -358,36 +404,6 @@ func validTransports() string {
 
 func main() {
 	var err error
-
-	nrLayers := flag.Int("L", nrLayers, "Number of layers.")
-	nrNodes := flag.Int("n", nrNodes, "Number of mixes.")
-	nrProviders := flag.Int("p", nrProviders, "Number of providers.")
-	voting := flag.Bool("v", true, "Generate voting configuration")
-	nrVoting := flag.Int("nv", nrAuthorities, "Generate voting configuration")
-	baseDir := flag.String("b", "", "Path to use as baseDir option")
-	basePort := flag.Int("P", basePort, "First port number to use")
-	bindAddr := flag.String("a", bindAddr, "Address to bind to")
-	outDir := flag.String("o", "", "Path to write files to")
-	dockerImage := flag.String("d", "katzenpost-go_mod", "Docker image for compose-compose")
-	binSuffix := flag.String("S", "", "suffix for binaries in docker-compose.yml")
-	logLevel := flag.String("log_level", "DEBUG", "logging level could be set to: DEBUG, INFO, NOTICE, WARNING, ERROR, CRITICAL")
-	omitTopology := flag.Bool("D", false, "Dynamic topology (omit fixed topology definition)")
-	onlyTransports := flag.String("onlyTransports", validTransports(), "Specify transports used.")
-	kem := flag.String("kem", "", "Name of the KEM Scheme to be used with Sphinx")
-	nike := flag.String("nike", "x25519", "Name of the NIKE Scheme to be used with Sphinx")
-	UserForwardPayloadLength := flag.Int("UserForwardPayloadLength", 2000, "UserForwardPayloadLength")
-
-	sr := flag.Uint64("sr", 0, "Sendrate limit")
-	mu := flag.Float64("mu", 0.005, "Inverse of mean of per hop delay.")
-	muMax := flag.Uint64("muMax", 1000, "Maximum delay for Mu.")
-	lP := flag.Float64("lP", 0.001, "Inverse of mean for client send rate LambdaP")
-	lPMax := flag.Uint64("lPMax", 1000, "Maximum delay for LambdaP.")
-	lL := flag.Float64("lL", 0.0005, "Inverse of mean of loop decoy send rate LambdaL")
-	lLMax := flag.Uint64("lLMax", 1000, "Maximum delay for LambdaL")
-	lD := flag.Float64("lD", 0.0005, "Inverse of mean of drop decoy send rate LambdaD")
-	lDMax := flag.Uint64("lDMax", 3000, "Maximum delay for LambaD")
-	lM := flag.Float64("lM", 0.2, "Inverse of mean of mix decoy send rate")
-	lMMax := flag.Uint64("lMMax", 100, "Maximum delay for LambdaM")
 
 	flag.Parse()
 
@@ -770,15 +786,24 @@ services:
     image: cashu
     network_mode: host
     expose:
-     - "3338/tcp"
+     - "%d/tcp"
     environment:
-     - MINT_LIGHTNING_BACKEND=FakeWallet
-     - MINT_PRIVATE_KEY=TEST_PRIVATE_KEY
-     - MINT_LISTEN_HOST=0.0.0.0
-     - MINT_LISTEN_PORT=3338
-     - TOR=False
+     - MINT_INFO_NAME=%s
+     - MINT_INFO_DESC=%s
+     - MINT_INFO_DESC_LONG=%s
+     - MINT_INFO_MOTD=%s
+     - MINT_HOST=%s
+     - MINT_PORT=%d
+     - MINT_LIGHTNING_BACKEND=%s
+     - MINT_LNBITS_ENDPOINT=%s
+     - MINT_PRIVATE_KEY=%s
+     - MINT_LISTEN_HOST=%s
+     - MINT_LISTEN_PORT=%d
+     - MINT_HTTP_PROXY=%s
+     - MINT_LIGHTNING_FEE_PERCENT=%f
+     - MINT_LIGHTNING_RESERVE_FEE_MIN=%d
     command: ["poetry", "run", "mint"]
-`)
+`, *mintPort /*expose*/ /*mint environment*/, *mintInfoName, *mintInfoDesc, *mintInfoDescLong, *mintInfoMotd, *mintHost, *mintPort, *mintLightningBackend, *mintLNBitsEndpoint, *mintPrivateKey, *mintListenHost, *mintListenPort, *mintHttpProxy, *mintLightningFeePercent, *mintLightningReserveFeeMin)
 
 	// add client cashu wallet
 	write(f, `
@@ -787,15 +812,15 @@ services:
     image: cashu
     network_mode: host
     expose:
-     - "4448/tcp"
+     - "%d/tcp"
     environment:
-      - HTTP_PROXY=http://127.0.0.1:8080
-      - MINT_URL=http://127.0.0.1:3338
-      - API_HOST=127.0.0.1
-      - API_PORT=4448
-      - TOR=False
+      - HTTP_PROXY=%s
+      - MINT_HOST=%s
+      - MINT_PORT=%d
+      - API_HOST=%s
+      - API_PORT=%d
     command: ["poetry", "run", "cashu", "-d"]
-`)
+`, *clientWalletApiPort, *clientWalletHttpProxy, *mintHost, *mintPort, *clientWalletApiHost, *clientWalletApiPort)
 
 	// add server cashu wallet
 	write(f, `
@@ -804,14 +829,14 @@ services:
     image: cashu
     network_mode: host
     expose:
-     - "4449/tcp"
+     - "%d/tcp"
     environment:
-      - HTTP_PROXY=http://127.0.0.1:8081
-      - MINT_URL=http://127.0.0.1:3338
-      - API_HOST=127.0.0.1
-      - API_PORT=4449
-      - TOR=False
+      - HTTP_PROXY=%s
+      - MINT_HOST=%s
+      - MINT_PORT=%d
+      - API_HOST=%s
+      - API_PORT=%d
     command: ["poetry", "run", "cashu", "-d"]
-`)
+`, *katzensocksWalletApiPort, *katzensocksWalletHttpProxy, *mintHost, *mintPort, *katzensocksWalletApiHost, *katzensocksWalletApiPort)
 	return nil
 }

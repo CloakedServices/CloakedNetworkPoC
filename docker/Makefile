@@ -45,6 +45,30 @@ nike=x25519
 # kem can be Kyber1024-X448 or any of the other schemes at https://github.com/cloudflare/circl/blob/main/kem/schemes/schemes.go (and then nike must be unset)
 kem=
 
+# mint options
+mint_info_name=katzenmint # The mint name
+mint_info_desc=a cashu mint # The short mint description
+mint_info_desc_long=a cashu mint hosted on katzenpost # A long mint description
+mint_info_motd=welcome to katzenmint # Message to users
+mint_host=127.0.0.1 # Wallet: Mint address
+mint_port=3338 # Wallet: Mint listening port
+mint_lightning_backend=FakeWallet # Backend: FakeWallet or LNbitsWallet
+mint_lnbits_endpoint="" #LNbits endpoint
+mint_private_key=TEST_PRIVATE_KEY # Mint private key
+mint_listen_host=127.0.0.1 # Mint: listening address
+mint_listen_port=3338 # Mint: listening port
+mint_http_proxy=http://127.0.0.1:9050 #Mint: http proxy
+mint_lightning_fee_percent=1.0 # Mint lightning fee percent
+mint_lightning_reserve_fee_min=2000 # lightning reserve fee min
+
+# cashu wallet options
+client_wallet_api_host=127.0.0.1 #Client Wallet API listening address
+client_wallet_api_port=4448 #Client Wallet API listening port
+katzensocks_wallet_api_host=127.0.0.1 #Client Wallet API listening address
+katzensocks_wallet_api_port=4449 #Wallet API listening port for katzensocks service
+client_wallet_http_proxy=http://127.0.0.1:8080
+katzensocks_wallet_http_proxy=http://127.0.0.1:8081
+
 DISTROS=alpine debian
 distro=alpine
 net_name=voting_mixnet
@@ -88,7 +112,27 @@ $(docker_compose_yml): ../genconfig/main.go $(distro)_go_mod.stamp $(net_name)
 		-S .$(distro) -v -o ./$(net_name) -b /$(net_name) -P $(base_port) \
 		-nike "$(nike)" -kem "$(kem)" -d katzenpost-$(distro)_go_mod \
 		-onlyTransports "$(onlyTransports)" -UserForwardPayloadLength $(UserForwardPayloadLength) \
-		-log_level $(log_level)'
+		-log_level $(log_level) \
+		-mint_info_name ${mint_info_name} \
+		-mint_info_desc ${mint_info_desc} \
+		-mint_info_desc_long ${mint_info_desc_long} \
+		-mint_info_motd ${mint_info_motd} \
+		-mint_host ${mint_host} \
+		-mint_port ${mint_port} \
+		-mint_lightning_backend ${mint_lightning_backend} \
+		-mint_lnbits_endpoint ${mint_lnbits_endpoint} \
+		-mint_private_key ${mint_private_key} \
+		-mint_listen_host ${mint_listen_host} \
+		-mint_listen_port ${mint_listen_port} \
+		-mint_http_proxy ${mint_http_proxy} \
+		-mint_lightning_fee_percent ${mint_lightning_fee_percent} \
+		-mint_lightning_reserve_fee_min ${mint_lightning_reserve_fee_min} \
+		-client_wallet_api_host ${client_wallet_api_host} \
+		-client_wallet_api_port ${client_wallet_api_port} \
+		-katzensocks_wallet_api_host ${katzensocks_wallet_api_host} \
+		-katzensocks_wallet_api_port ${katzensocks_wallet_api_port} \
+		-client_wallet_http_proxy ${client_wallet_http_proxy} \
+		-katzensocks_wallet_http_proxy ${katzensocks_wallet_http_proxy}'
 
 $(net_name)/running.stamp: $(net_name)
 	make $(make_args) start
