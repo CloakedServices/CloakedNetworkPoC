@@ -757,7 +757,7 @@ services:
     image: %s
     volumes:
       - ./:%s
-    command: %s/katzensocks%s -cfg %s/client/client.toml -port 4242
+    command: %s/katzensocks%s -cfg %s/client/client.toml -socks5 4242
     network_mode: host
     expose:
      - "4242/tcp"

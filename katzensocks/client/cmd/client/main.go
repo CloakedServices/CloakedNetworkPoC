@@ -1,28 +1,33 @@
 package main
 
 import (
-	"github.com/katzenpost/katzenpost/katzensocks/client"
 	"github.com/katzenpost/katzenpost/client/utils"
+	"github.com/katzenpost/katzenpost/katzensocks/client"
+	kquic "github.com/katzenpost/katzenpost/quic"
+	quic "github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
 
+	"context"
 	"flag"
 	"fmt"
-	"context"
 	"net"
 	"sync"
 	"time"
 )
 
 var (
-	cfgFile = flag.String("cfg", "katzensocks.toml", "config file")
-	gateway = flag.String("gw", "", "gateway provider name, default uses random gateway for each connection")
-	pkiOnly = flag.Bool("list", false, "fetch and display pki and gateways, does not connect")
-	port    = flag.Int("port", 4242, "listener address")
-	retry   = flag.Int("retry", -1, "limit number of reconnection attempts")
-	delay   = flag.Int("delay", 30, "time to wait between connection attempts (seconds)>")
+	cfgFile   = flag.String("cfg", "katzensocks.toml", "config file")
+	gateway   = flag.String("gw", "", "gateway provider name, default uses random gateway for each connection")
+	pkiOnly   = flag.Bool("list", false, "fetch and display pki and gateways, does not connect")
+	bind      = flag.String("bind", "127.0.0.1", "address to bind to")
+	socksPort = flag.Int("socks5", 4242, "socks5 listening port")
+	http3Port = flag.Int("http3", 4343, "http3 proxy listening port")
+	retry     = flag.Int("retry", -1, "limit number of reconnection attempts")
+	delay     = flag.Int("delay", 30, "time to wait between connection attempts (seconds)>")
 )
 
 func showPKI() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*delay) * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*delay)*time.Second)
 	defer cancel()
 
 	_, doc, err := client.GetPKI(ctx, *cfgFile)
@@ -45,7 +50,32 @@ func main() {
 		showPKI()
 		return
 	}
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	listenSOCKS()
+
+}
+
+func listenQUIC() {
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", *bind, *http3Port))
+	if err != nil {
+		panic(err)
+	}
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		panic(err)
+	}
+	qcfg := &quic.Config{}
+	tlsConf := kquic.GenerateTLSConfig()
+	//l, err := quic.Listen(conn, tlsConf, qcfg)
+	//if err != nil {
+	//	panic(err)
+	//}
+	server := http3.Server{QuicConfig: qcfg, TLSConfig: tlsConf}
+	server.Serve(conn)
+	//http3.ListenAndServeQUIC(fmt.Sprintf("%s:%d", *bind, *http3Port), cert, key,
+}
+
+func listenSOCKS() {
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", *socksPort))
 	if err != nil {
 		panic(err)
 	}
@@ -68,13 +98,6 @@ func main() {
 		_ = socksAcceptLoop(c, ln)
 		wg.Done()
 	}()
-	/*
-		TODO: Add a HTTP3 CONNECT proxy listener that uses QUIC Datagram to proxy QUIC UDP connections
-		wg.Add(1)
-		go func() {
-			_ = httpAcceptLoop(s, ..
-	*/
-	// wait until loop has exited
 	wg.Wait()
 }
 
