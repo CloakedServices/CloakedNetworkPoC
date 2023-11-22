@@ -36,6 +36,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"sync"
@@ -499,6 +500,36 @@ func (c *Client) Proxy(id []byte, conn net.Conn) (*common.QUICProxyConn, chan er
 		}
 	})
 	return qconn, errCh
+}
+
+// HTTP proxy handler
+func (c *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	c.log.Error("got http3 request")
+
+	// https://datatracker.ietf.org/doc/rfc9114/
+	// 4.4.  The CONNECT Method
+	/*
+
+	*  The :method pseudo-header field is set to "CONNECT"
+
+	*  The :scheme and :path pseudo-header fields are omitted
+
+	*  The :authority pseudo-header field contains the host and port to
+	connect to (equivalent to the authority-form of the request-target
+	of CONNECT requests; see Section 7.1 of [HTTP]).
+
+	The request stream remains open at the end of the request to carry
+	the data to be transferred.  A CONNECT request that does not conform
+	to these restrictions is malformed.
+
+	A proxy that supports CONNECT establishes a TCP connection
+	([RFC0793]) to the server identified in the :authority pseudo-header
+	field.  Once this connection is successfully established, the proxy
+	sends a HEADERS frame containing a 2xx series status code to the
+	client, as defined in Section 15.3 of [HTTP].
+	*/
+	w.WriteHeader(http.StatusCode(200))
+
 }
 
 func (c *Client) SocksHandler(conn net.Conn) {

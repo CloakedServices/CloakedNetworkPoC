@@ -24,6 +24,7 @@ var (
 	http3Port = flag.Int("http3", 4343, "http3 proxy listening port")
 	retry     = flag.Int("retry", -1, "limit number of reconnection attempts")
 	delay     = flag.Int("delay", 30, "time to wait between connection attempts (seconds)>")
+	wg        = new(sync.WaitGroup)
 )
 
 func showPKI() {
@@ -50,11 +51,22 @@ func main() {
 		showPKI()
 		return
 	}
-	listenSOCKS()
+	s, err := client.GetSession(*cfgFile, *delay, *retry)
+	if err != nil {
+		panic(err)
+	}
 
+	c, err := client.NewClient(s)
+	if err != nil {
+		panic(err)
+	}
+
+	listenSOCKS(c)
+	listenQUIC(c)
+	wg.Wait()
 }
 
-func listenQUIC() {
+func listenQUIC(c *client.Client) {
 	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", *bind, *http3Port))
 	if err != nil {
 		panic(err)
@@ -69,36 +81,25 @@ func listenQUIC() {
 	//if err != nil {
 	//	panic(err)
 	//}
-	server := http3.Server{QuicConfig: qcfg, TLSConfig: tlsConf}
-	server.Serve(conn)
-	//http3.ListenAndServeQUIC(fmt.Sprintf("%s:%d", *bind, *http3Port), cert, key,
+	server := http3.Server{QuicConfig: qcfg, TLSConfig: tlsConf, Handler: c}
+	wg.Add(1)
+	go func() {
+		server.Serve(conn)
+		wg.Done()
+	}()
 }
 
-func listenSOCKS() {
+func listenSOCKS(c *client.Client) {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", *socksPort))
 	if err != nil {
 		panic(err)
 	}
 
-	s, err := client.GetSession(*cfgFile, *delay, *retry)
-	if err != nil {
-		panic(err)
-	}
-
-	c, err := client.NewClient(s)
-	if err != nil {
-		panic(err)
-	}
-	if err != nil {
-		panic(err)
-	}
-	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	go func() {
 		_ = socksAcceptLoop(c, ln)
 		wg.Done()
 	}()
-	wg.Wait()
 }
 
 func socksAcceptLoop(c *client.Client, ln net.Listener) error {
