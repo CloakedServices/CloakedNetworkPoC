@@ -30,6 +30,9 @@ import (
 	"github.com/katzenpost/katzenpost/katzensocks/common"
 	"github.com/katzenpost/katzenpost/katzensocks/server"
 	"github.com/katzenpost/katzenpost/katzensocks/socks5"
+	kquic "github.com/katzenpost/katzenpost/quic"
+	quic "github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
 	"gopkg.in/op/go-logging.v1"
 
 	"context"
@@ -505,31 +508,87 @@ func (c *Client) Proxy(id []byte, conn net.Conn) (*common.QUICProxyConn, chan er
 // HTTP proxy handler
 func (c *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	c.log.Error("got http3 request")
+	// quic-go/http3.Server.handleRequest validates CONNECT semantics are correct
+	// https://datatracker.ietf.org/doc/html/draft-ietf-quic-http-34#section-4.2
 
-	// https://datatracker.ietf.org/doc/rfc9114/
-	// 4.4.  The CONNECT Method
-	/*
+	if req.Method != http.MethodConnect {
+		c.log.Error("CONNECT proxy received request with unsupported method", req.Method)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-	*  The :method pseudo-header field is set to "CONNECT"
+	// if the req.Proto is specified, it's ane extended request
+	// The request stream remains open at the end of the request to carry
+	// the data to be transferred.  A CONNECT request that does not conform
+	// to these restrictions is malformed.
+	c.log.Debugf("requested: %s", req.Host)
+	var target string
+	if req.Proto == "HTTP/3.0" {
+		// make a UDP connection at exit
+		c.log.Debugf("Protocol: %s", req.Proto)
+		target = "udp://" + req.Host
+	} else {
+		target = "tcp://" + req.Host
+	}
+	tgtURL, err := url.Parse(target)
+	if err != nil {
+		c.log.Errorf("Failed to parse target: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-	*  The :scheme and :path pseudo-header fields are omitted
+	id, err := c.NewSession()
+	if err != nil {
+		c.log.Errorf("NewSession failure: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-	*  The :authority pseudo-header field contains the host and port to
-	connect to (equivalent to the authority-form of the request-target
-	of CONNECT requests; see Section 7.1 of [HTTP]).
 
-	The request stream remains open at the end of the request to carry
-	the data to be transferred.  A CONNECT request that does not conform
-	to these restrictions is malformed.
+	err = <-c.Dial(id, tgtURL)
+	if err != nil {
+		c.log.Errorf("Dial failure: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-	A proxy that supports CONNECT establishes a TCP connection
-	([RFC0793]) to the server identified in the :authority pseudo-header
-	field.  Once this connection is successfully established, the proxy
-	sends a HEADERS frame containing a 2xx series status code to the
-	client, as defined in Section 15.3 of [HTTP].
-	*/
-	w.WriteHeader(http.StatusCode(200))
+	// A proxy that supports CONNECT establishes a TCP connection
+	// ([RFC0793]) to the server identified in the :authority pseudo-header
+	// field.  Once this connection is successfully established, the proxy
+	// sends a HEADERS frame containing a 2xx series status code to the
+	// client, as defined in Section 15.3 of [HTTP].
+	w.WriteHeader(http.StatusOK)
+	
+	streamer, ok := req.Body.(http3.HTTPStreamer)
+	if !ok {
+		c.log.Fatal("Not a http3 body?")
+	}
+	hijacker, ok := req.Body.(http3.Hijacker)
+	if !ok {
+		c.log.Fatal("Not a http3 body?")
+	}
+	creator, ok := hijacker.StreamCreator().(quic.Connection)
+	if !ok {
+		c.log.Fatal("Not a http3 connection?")
+	}
 
+	// get a handle to conn and stream
+	conn := &kquic.QuicConn{Stream: streamer.HTTPStream(), Conn: creator}
+	// read request.Body
+	// get the underlying quic stream conn from the request
+	// start proxying data
+	qconn, errCh := c.Proxy(id, conn)
+
+	// consume all errors
+	for err := range errCh {
+		if err != nil {
+			c.log.Errorf("Proxy returned error: %v", err)
+			err = qconn.Close()
+			if err != nil {
+				c.log.Errorf("QUICProxyConn.Close failed with error: %v", err)
+			}
+		}
+	}
 }
 
 func (c *Client) SocksHandler(conn net.Conn) {
