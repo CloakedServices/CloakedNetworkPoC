@@ -544,7 +544,17 @@ func (c *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	err = <-c.Topup(id)
+	if err != nil {
+		// XXX: on an error, send Cashu to self or unmark as pending
+		// if a malicious service takes the money and runs
+		c.log.Errorf("Failed to topup session %v: %v", id, err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
+
+	c.log.Debugf("Dialing %v", tgtURL)
 	err = <-c.Dial(id, tgtURL)
 	if err != nil {
 		c.log.Errorf("Dial failure: %v", err)

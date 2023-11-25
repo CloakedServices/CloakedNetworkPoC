@@ -77,10 +77,6 @@ func listenQUIC(c *client.Client) {
 	}
 	qcfg := &quic.Config{}
 	tlsConf := kquic.GenerateTLSConfig()
-	//l, err := quic.Listen(conn, tlsConf, qcfg)
-	//if err != nil {
-	//	panic(err)
-	//}
 	server := http3.Server{QuicConfig: qcfg, TLSConfig: tlsConf, Handler: c}
 	wg.Add(1)
 	go func() {
