@@ -299,9 +299,12 @@ func (s *Session) reset() {
 		s.Target.Close()
 		s.Target = nil
 	}
-	s.Transport.Close()
+	if s.Transport != nil {
+		s.Transport.Close()
+		s.Transport = nil
+	}
+	s.Mode = 0
 	s.acceptOnce = new(sync.Once)
-	s.Transport = nil
 }
 
 // OnCommand implements cborplugin.ServicePlugin OnCommand
@@ -446,6 +449,48 @@ func (s *Session) AcceptOnce(transport common.Transport, target net.Conn) {
 			s.reset()
 		})
 	})
+}
+
+func (s *Session) SendRecvUDP(payload []byte) ([]byte, error) {
+	s.Lock()
+	target := s.Target
+	s.Unlock()
+	if target == nil { // wtf
+		s.s.log.Error("SendRecv() called before Target exists")
+		return nil, errors.New("No Target")
+	}
+	// WritePacket into transport
+	if len(payload) != 0 {
+		n, err := target.Write(payload)
+		if err != nil {
+			s.s.log.Errorf("Write failure: %v", err)
+			return nil, err
+		}
+		if n != len(payload) {
+			s.s.log.Errorf("Write failed to send entire payload: %d vs %d", n, len(payload))
+			return nil, errors.New("Short write payload")
+		}
+	}
+
+	// read packet from transport
+	buf := make([]byte, s.s.payloadLen)
+
+	// XXX
+	// DefaultDeadline controls how long the server will block reading a message
+	// to send to the client. If there is no response available before DefaultDeadline,
+	// then an empty payload is returned to the client.
+	target.SetReadDeadline(time.Now().Add(DefaultDeadline))
+	n, err := target.Read(buf)
+	switch err {
+	case nil, os.ErrDeadlineExceeded:
+		s.s.log.Debugf("Read: os.ErrDeadlineExceeded: %v", DefaultDeadline)
+	default:
+		s.s.log.Error("Read failure: %v", err)
+		return nil, err
+	}
+	s.s.log.Debugf("got %d bytes to %v", n, s.Peer)
+	return buf[:n], nil
+
 }
 
 // SendRecv reads and writes data from the sockets
@@ -616,15 +661,30 @@ func (s *Server) proxy(cmd *ProxyCommand) (cborplugin.Command, error) {
 	}
 
 	// SendRecv writes payload and reads packets from the session connection
-	rawReply, err := ss.SendRecv(cmd.Payload)
-	if err != nil {
-		s.log.Errorf("SendRecv err: %v", err)
-		reply.Status = ProxyFailure
+	switch ss.Mode {
+	case TCP:
+		rawReply, err := ss.SendRecv(cmd.Payload)
+		if err != nil {
+			s.log.Errorf("SendRecv err: %v", err)
+			reply.Status = ProxyFailure
+			return reply, nil
+		}
+		reply.Status = ProxySuccess
+		reply.Payload = rawReply
 		return reply, nil
+	case UDP:
+		rawReply, err := ss.SendRecvUDP(cmd.Payload)
+		if err != nil {
+			s.log.Errorf("SendRecvUDP err: %v", err)
+			reply.Status = ProxyFailure
+			return reply, nil
+		}
+		reply.Status = ProxySuccess
+		reply.Payload = rawReply
+		return reply, nil
+	default:
+		panic("NotReached")
 	}
-	reply.Status = ProxySuccess
-	reply.Payload = rawReply
-	return reply, nil
 }
 
 func (s *Server) invalid(cmd cborplugin.Command) (cborplugin.Command, error) {

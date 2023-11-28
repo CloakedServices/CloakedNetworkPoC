@@ -312,6 +312,149 @@ func (c *Client) handleReply(conn *common.QUICProxyConn, sessionID []byte, errCh
 	}
 }
 
+// ProxyDatagram reads and writes from the remote UDP soocket
+func (c *Client) ProxyUDP(id []byte, conn net.Conn) chan error {
+	errCh := make(chan error, 3)
+	c.Lock()
+	desc, ok := c.sessionToDesc[string(id)]
+	if !ok {
+		c.Unlock()
+		go func() {
+			errCh <- errors.New("Gateway descriptor missing")
+		}()
+		return errCh
+	}
+	c.Unlock()
+
+	// Start a worker that sends packets
+	c.Go(func() {
+		backOffDelay := 42 * time.Millisecond
+		for {
+			select {
+			case <-c.HaltCh():
+				return
+			default:
+			}
+
+			// try to read data from target, but do not block reading a socket
+			conn.SetReadDeadline(time.Now().Add(backOffDelay))
+
+			// read packet from transport
+			pkt := make([]byte, c.s.SphinxGeometry().UserForwardPayloadLength)
+			n, err := conn.Read(pkt)
+
+			if err != nil {
+				if err.Error() == "Halted" {
+					c.log.Debugf("Halted in ReadPacket")
+					return
+				}
+				if err != os.ErrDeadlineExceeded {
+					// handle unexpected error
+					c.log.Error("Read failure: %v", err)
+					errCh <- err
+					return
+				}
+			}
+
+			// wrap packet in a kaetzchen request
+			serialized, err := (&server.ProxyCommand{ID: id, Payload: pkt[:n]}).Marshal()
+			if err != nil {
+				errCh <- err
+				return
+			}
+			serialized, err = (&server.Request{Command: server.Proxy, Payload: serialized}).Marshal()
+			// send frame to service and receive a reply
+			c.log.Debugf("Send Request{Packet}")
+
+			//XXX: create our own sphinx packet with custom delays
+			//c.SendSphinxPacket()
+			// don't drop serialized on the floor if SendUnreliableMessage returns "ErrQueueIsFull"
+			for {
+				msgID, err := c.s.SendUnreliableMessage(desc.Name, desc.Provider, serialized)
+				if err != nil {
+					c.log.Errorf("SendUnreliableMessage: %v", err)
+					c.log.Errorf("SendUnreliableMessage: backoffDelay %v", backOffDelay)
+					backOffDelay = backOffDelay << 2
+
+					if n == 0 {
+						break // short circuit to blocking read for backOffDelay
+					}
+					// XXX: maxBackoffDelay or select on connection status event
+					select {
+					case <-time.After(backOffDelay):
+					case <-c.HaltCh():
+						return
+					}
+					continue
+				} else {
+					if n != 0 {
+						backOffDelay = (backOffDelay >> 1)
+					} else {
+						backOffDelay = (backOffDelay << 1)
+					}
+					if backOffDelay < backOffFloor {
+						backOffDelay = backOffFloor
+					}
+					c.Lock()
+					c.msgCallbacks[*msgID] = func(event *client.MessageReplyEvent) {
+						c.Lock()
+						delete(c.msgCallbacks, *msgID)
+						c.Unlock()
+						if event.Err == nil {
+							n, err := conn.Write(event.Payload)
+							if err != nil {
+								c.log.Error("Write to local socket failed: %s", err)
+								errCh <- err
+								return
+							}
+							if n != len(event.Payload) {
+								c.log.Error("Short Write: %d vs %d", n, len(event.Payload))
+								errCh <- err
+								return
+							}
+						}
+					}
+					c.Unlock()
+					break
+				}
+			}
+		}
+	})
+	// start a transport worker that receives packets for this qconn
+	c.Go(func() {
+		c.log.Debugf("Started kaetzchen proxy receive worker")
+		defer func() {
+			c.log.Debugf("Event sink worker terminating gracefully.")
+		}()
+		for {
+			select {
+			case e := <-c.s.EventSink:
+				switch event := e.(type) {
+				case *client.MessageReplyEvent:
+					c.Lock()
+					callback, ok := c.msgCallbacks[*event.MessageID]
+					c.Unlock()
+					if ok {
+						callback(event)
+					} else {
+						c.log.Errorf("No callback for ReplyEvent")
+					}
+				case *client.ConnectionStatusEvent:
+					c.log.Notice(event.String())
+				case *client.NewDocumentEvent:
+					// TODO update descriptors, kill sessions that use missing descriptors
+					c.log.Errorf("Got new document, but haven't implemented handlers")
+				}
+			// XXX: restart transport worker on new session
+			//case <-c.s.HaltCh():
+			case <-c.HaltCh():
+				return
+			}
+		}
+	})
+	return errCh
+}
+
 // Proxy starts proxying data from conn and the remote Target. It returns the QUICProxyConn
 // used to transport data from conn, and a channel where any errors are passed
 func (c *Client) Proxy(id []byte, conn net.Conn) (*common.QUICProxyConn, chan error) {
@@ -545,12 +688,14 @@ func (c *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// to these restrictions is malformed.
 	c.log.Debugf("requested: %s", req.Host)
 	var target string
+	c.log.Debugf("Protocol: %s", req.Proto)
 	if req.Proto == "HTTP/3.0" {
 		// make a UDP connection at exit
-		c.log.Debugf("Protocol: %s", req.Proto)
 		target = "udp://" + req.Host
 	} else {
-		target = "tcp://" + req.Host
+		// XXX: always try quic first
+		//target = "tcp://" + req.Host
+		target = "udp://" + req.Host
 	}
 	tgtURL, err := url.Parse(target)
 	if err != nil {
@@ -574,7 +719,6 @@ func (c *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
 
 	c.log.Debugf("Dialing %v", tgtURL)
 	err = <-c.Dial(id, tgtURL)
@@ -607,16 +751,12 @@ func (c *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// read request.Body
 	// get the underlying quic stream conn from the request
 	// start proxying data
-	qconn, errCh := c.Proxy(id, conn)
+	errCh := c.ProxyUDP(id, conn)
 
 	// consume all errors
 	for err := range errCh {
 		if err != nil {
 			c.log.Errorf("Proxy returned error: %v", err)
-			err = qconn.Close()
-			if err != nil {
-				c.log.Errorf("QUICProxyConn.Close failed with error: %v", err)
-			}
 		}
 	}
 }
