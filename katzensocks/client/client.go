@@ -47,7 +47,6 @@ import (
 )
 
 var (
-	cfg *config.Config
 	// set a minimum floor for the polling loop
 	backOffFloor = 100 * time.Millisecond
 
