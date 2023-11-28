@@ -114,6 +114,7 @@ type Client struct {
 	desc          *utils.ServiceDescriptor
 	descs         []*utils.ServiceDescriptor
 	sessionToDesc map[string]*utils.ServiceDescriptor
+	streamToConn  map[quic.StreamID]quic.Connection
 	log           *logging.Logger
 	s             *client.Session
 	msgCallbacks  map[[constants.MessageIDLength]byte]func(*client.MessageReplyEvent)
@@ -132,7 +133,8 @@ func NewClient(s *client.Session) (*Client, error) {
 
 	return &Client{descs: descs, s: s, log: l, payloadLen: s.SphinxGeometry().UserForwardPayloadLength,
 		msgCallbacks:  make(map[[constants.MessageIDLength]byte]func(*client.MessageReplyEvent)),
-		sessionToDesc: make(map[string]*utils.ServiceDescriptor), cashuClient: cashuClient}, nil
+		sessionToDesc: make(map[string]*utils.ServiceDescriptor), cashuClient: cashuClient,
+		streamToConn: make(map[quic.StreamID]quic.Connection)}, nil
 }
 
 // topup sends a TopupCommand and returns a channel. err nil means success.
@@ -504,6 +506,27 @@ func (c *Client) Proxy(id []byte, conn net.Conn) (*common.QUICProxyConn, chan er
 	return qconn, errCh
 }
 
+// mapStream implements StreamHijacker
+func (c *Client) MapStream(ft http3.FrameType, conn quic.Connection, stream quic.Stream, err error) (bool, error) {
+	c.log.Debugf("Got stream %v for conn %v", stream.StreamID(), conn.LocalAddr())
+	c.Lock()
+	c.streamToConn[stream.StreamID()] = conn
+	c.Unlock()
+	return false, nil
+}
+
+// findConn
+func (c *Client) findConn(stream quic.Stream) (quic.Connection, error) {
+	c.Lock()
+	conn, ok := c.streamToConn[stream.StreamID()]
+	c.Unlock()
+	if ok {
+		return conn, nil
+	}
+
+	return nil, errors.New("No Conn found")
+}
+
 // HTTP proxy handler
 func (c *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	c.log.Error("got http3 request")
@@ -566,23 +589,21 @@ func (c *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// field.  Once this connection is successfully established, the proxy
 	// sends a HEADERS frame containing a 2xx series status code to the
 	// client, as defined in Section 15.3 of [HTTP].
-	w.WriteHeader(http.StatusOK)
-	
+
 	streamer, ok := req.Body.(http3.HTTPStreamer)
 	if !ok {
-		c.log.Fatal("Not a http3 body?")
-	}
-	hijacker, ok := req.Body.(http3.Hijacker)
-	if !ok {
-		c.log.Fatal("Not a http3 body?")
-	}
-	creator, ok := hijacker.StreamCreator().(quic.Connection)
-	if !ok {
-		c.log.Fatal("Not a http3 connection?")
+		c.log.Fatal("Not a HTTPStreamer")
 	}
 
 	// get a handle to conn and stream
-	conn := &kquic.QuicConn{Stream: streamer.HTTPStream(), Conn: creator}
+	stream := streamer.HTTPStream()
+	_conn, err := c.findConn(stream)
+	if err != nil {
+		c.log.Error("Did not find corresponding quic.Connection")
+	}
+	w.WriteHeader(http.StatusOK)
+
+	conn := &kquic.QuicConn{Stream: stream, Conn: _conn}
 	// read request.Body
 	// get the underlying quic stream conn from the request
 	// start proxying data

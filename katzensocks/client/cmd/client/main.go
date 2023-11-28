@@ -77,7 +77,7 @@ func listenQUIC(c *client.Client) {
 	}
 	qcfg := &quic.Config{}
 	tlsConf := kquic.GenerateTLSConfig()
-	server := http3.Server{QuicConfig: qcfg, TLSConfig: tlsConf, Handler: c}
+	server := http3.Server{QuicConfig: qcfg, TLSConfig: tlsConf, Handler: c, StreamHijacker: c.MapStream}
 	wg.Add(1)
 	go func() {
 		server.Serve(conn)
